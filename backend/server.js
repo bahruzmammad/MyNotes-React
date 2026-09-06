@@ -17,25 +17,12 @@ import profileRoutes from "./routes/profileRoutes.js";
 
 import { log } from "./utils/logger.js";
 
-// ============================================================
-// APP
-// ============================================================
-
 const app = express();
-
-// ============================================================
-// CONFIG
-// ============================================================
 
 const PORT = Number(process.env.PORT) || 5000;
 
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 
-// ============================================================
-// SECURITY
-// ============================================================
-
-// Security HTTP headers
 app.use(
   helmet({
     crossOriginResourcePolicy: {
@@ -58,10 +45,6 @@ const apiLimiter = rateLimit({
 
 app.use("/api", apiLimiter);
 
-// ============================================================
-// CORS
-// ============================================================
-
 app.use(
   cors({
     origin: CLIENT_URL,
@@ -70,10 +53,6 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
-
-// ============================================================
-// BODY PARSERS
-// ============================================================
 
 app.use(
   express.json({
@@ -91,15 +70,7 @@ app.use(
 // Cookies
 app.use(cookieParser());
 
-// ============================================================
-// REQUEST LOGGER
-// ============================================================
-
 app.use(requestLogger);
-
-// ============================================================
-// HEALTH CHECK
-// ============================================================
 
 app.get("/api/health", (req, res) => {
   return res.status(200).json({
@@ -110,10 +81,6 @@ app.get("/api/health", (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
-
-// ============================================================
-// API INFO
-// ============================================================
 
 app.get("/api", (req, res) => {
   return res.status(200).json({
@@ -129,17 +96,9 @@ app.get("/api", (req, res) => {
   });
 });
 
-// ============================================================
-// ROUTES
-// ============================================================
-
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/notes", noteRoutes);
-
-// ============================================================
-// 404
-// ============================================================
 
 app.use((req, res) => {
   log.warn(`404 Route: ${req.method} ${req.originalUrl}`);
@@ -152,15 +111,7 @@ app.use((req, res) => {
   });
 });
 
-// ============================================================
-// GLOBAL ERROR HANDLER
-// ============================================================
-
 app.use(errorHandler);
-
-// ============================================================
-// START SERVER
-// ============================================================
 
 const server = app.listen(PORT, () => {
   console.log("");
@@ -184,10 +135,6 @@ const server = app.listen(PORT, () => {
   log.success("Server uğurla başladıldı.");
 });
 
-// ============================================================
-// GRACEFUL SHUTDOWN
-// ============================================================
-
 const shutdown = (signal) => {
   log.warn(`${signal} alındı. Server dayandırılır...`);
 
@@ -204,10 +151,6 @@ process.on("SIGINT", () => {
 process.on("SIGTERM", () => {
   shutdown("SIGTERM");
 });
-
-// ============================================================
-// UNHANDLED ERRORS
-// ============================================================
 
 process.on("uncaughtException", (error) => {
   log.error(`Uncaught Exception: ${error.message}`);
