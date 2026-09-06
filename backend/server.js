@@ -1,25 +1,18 @@
-import "dotenv/config";
-
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
-import "./config/database.js";
-
 import requestLogger from "./middleware/requestLogger.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { log } from "./utils/logger.js";
 
 import authRoutes from "./routes/authRoutes.js";
 import noteRoutes from "./routes/noteRoutes.js";
 import profileRoutes from "./routes/profileRoutes.js";
 
-import { log } from "./utils/logger.js";
-
 const app = express();
-
-const PORT = Number(process.env.PORT) || 5000;
 
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 
@@ -31,7 +24,6 @@ app.use(
   }),
 );
 
-// Basic API rate limit
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
@@ -67,16 +59,13 @@ app.use(
   }),
 );
 
-// Cookies
 app.use(cookieParser());
-
 app.use(requestLogger);
 
 app.get("/api/health", (req, res) => {
   return res.status(200).json({
     success: true,
     message: "API işləyir.",
-    database: "SQLite",
     environment: process.env.NODE_ENV || "development",
     timestamp: new Date().toISOString(),
   });
@@ -101,8 +90,6 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/notes", noteRoutes);
 
 app.use((req, res) => {
-  log.warn(`404 Route: ${req.method} ${req.originalUrl}`);
-
   return res.status(404).json({
     success: false,
     message: "Endpoint tapılmadı.",
@@ -113,51 +100,31 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
+const PORT = Number(process.env.PORT) || 5000;
+
 const server = app.listen(PORT, () => {
-  console.log("");
-
-  console.log("========================================");
-  console.log("          NOTES API SERVER");
-  console.log("========================================");
-  console.log(`ENVIRONMENT: ${process.env.NODE_ENV || "development"}`);
-  console.log(`PORT: ${PORT}`);
-  console.log(`URL: http://localhost:${PORT}`);
-  console.log(`API: http://localhost:${PORT}/api`);
-  console.log(`HEALTH: http://localhost:${PORT}/api/health`);
-  console.log(`AUTH: http://localhost:${PORT}/api/auth`);
-  console.log(`PROFILE: http://localhost:${PORT}/api/profile`);
-  console.log(`NOTES: http://localhost:${PORT}/api/notes`);
-  console.log(`CLIENT: ${CLIENT_URL}`);
-  console.log("========================================");
-
-  console.log("");
-
-  log.success("Server uğurla başladıldı.");
+  log.success(`Notes API server başladı. Port: ${PORT}`);
+  log.success(`URL: http://localhost:${PORT}`);
+  log.success(`API: http://localhost:${PORT}/api`);
+  log.success(`Health: http://localhost:${PORT}/api/health`);
 });
 
-const shutdown = (signal) => {
-  log.warn(`${signal} alındı. Server dayandırılır...`);
+process.on("SIGINT", () => {
+  log.info("Server dayandırılır...");
 
   server.close(() => {
-    log.success("HTTP server bağlandı.");
+    log.success("Server dayandırıldı.");
     process.exit(0);
   });
-};
-
-process.on("SIGINT", () => {
-  shutdown("SIGINT");
 });
 
 process.on("SIGTERM", () => {
-  shutdown("SIGTERM");
+  log.info("Server dayandırılır...");
+
+  server.close(() => {
+    log.success("Server dayandırıldı.");
+    process.exit(0);
+  });
 });
 
-process.on("uncaughtException", (error) => {
-  log.error(`Uncaught Exception: ${error.message}`);
-  console.error(error);
-});
-
-process.on("unhandledRejection", (reason) => {
-  log.error(`Unhandled Rejection: ${reason}`);
-  console.error(reason);
-});
+export default app;
