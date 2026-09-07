@@ -1,15 +1,15 @@
-import { log } from "../utils/logger.js";
+import { log } from "../utils/logger.js"
 
 const requestLogger = (req, res, next) => {
-  const startTime = Date.now();
+    const startTime = Date.now()
 
-  res.on("finish", () => {
-    const duration = Date.now() - startTime;
+    res.on("finish", () => {
+        const duration = Date.now() - startTime
 
-    log.request(req.method, req.originalUrl, res.statusCode, duration);
-  });
+        log.request(req.method, req.originalUrl, res.statusCode, duration)
+    })
 
-  next();
-};
+    next()
+}
 
-export default requestLogger;
+export default requestLogger

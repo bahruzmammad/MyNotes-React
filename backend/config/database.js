@@ -1,34 +1,31 @@
-import sqlite3 from "sqlite3";
-import dotenv from "dotenv";
-import { log } from "../utils/logger.js";
+import sqlite3 from "sqlite3"
+import { log } from "../utils/logger.js"
 
-dotenv.config();
+const sqlite = sqlite3.verbose()
 
-const sqlite = sqlite3.verbose();
-
-const dbPath = process.env.DB_PATH || "./notes.db";
+const dbPath = process.env.DB_PATH || "./notes.db"
 
 const db = new sqlite.Database(dbPath, (err) => {
-  if (err) {
-    log.error(`SQLite bağlantı xətası: ${err.message}`);
-    return;
-  }
-
-  log.success(`SQLite bazasına uğurla qoşuldu: ${dbPath}`);
-});
-
-db.serialize(() => {
-  db.run("PRAGMA foreign_keys = ON", (err) => {
     if (err) {
-      log.error(`Foreign keys aktivləşdirilmədi: ${err.message}`);
-      return;
+        log.error(`SQLite bağlantı xətası: ${err.message}`)
+        return
     }
 
-    log.success("SQLite foreign keys aktivdir.");
-  });
+    log.success(`SQLite bazasına uğurla qoşuldu: ${dbPath}`)
+})
 
-  db.run(
-    `
+db.serialize(() => {
+    db.run("PRAGMA foreign_keys = ON", (err) => {
+        if (err) {
+            log.error(`Foreign keys aktivləşdirilmədi: ${err.message}`)
+            return
+        }
+
+        log.success("SQLite foreign keys aktivdir.")
+    })
+
+    db.run(
+        `
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -40,18 +37,18 @@ db.serialize(() => {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     `,
-    (err) => {
-      if (err) {
-        log.error(`users cədvəli yaradılmadı: ${err.message}`);
-        return;
-      }
+        (err) => {
+            if (err) {
+                log.error(`users cədvəli yaradılmadı: ${err.message}`)
+                return
+            }
 
-      log.success("users cədvəli hazırdır.");
-    },
-  );
+            log.success("users cədvəli hazırdır.")
+        },
+    )
 
-  db.run(
-    `
+    db.run(
+        `
     CREATE TABLE IF NOT EXISTS notes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -68,15 +65,15 @@ db.serialize(() => {
         ON DELETE CASCADE
     )
     `,
-    (err) => {
-      if (err) {
-        log.error(`notes cədvəli yaradılmadı: ${err.message}`);
-        return;
-      }
+        (err) => {
+            if (err) {
+                log.error(`notes cədvəli yaradılmadı: ${err.message}`)
+                return
+            }
 
-      log.success("notes cədvəli hazırdır.");
-    },
-  );
-});
+            log.success("notes cədvəli hazırdır.")
+        },
+    )
+})
 
-export default db;
+export default db
