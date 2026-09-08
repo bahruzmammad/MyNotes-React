@@ -9,13 +9,13 @@ MyNotes is a full-stack application designed to replace traditional note-taking 
 ## Demo
 
 <p align="center">
-  <img src="docs/screenshots/demo1.jpg" width="48%" alt="MyNotes Demo 1">
-  <img src="docs/screenshots/demo2.jpg" width="48%" alt="MyNotes Demo 2">
+  <img src="docs/screenshots/demo1.png" width="48%" alt="MyNotes Demo 1">
+  <img src="docs/screenshots/demo2.png" width="48%" alt="MyNotes Demo 2">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/demo3.jpg" width="48%" alt="MyNotes Demo 3">
-  <img src="docs/screenshots/demo4.jpg" width="48%" alt="MyNotes Demo 4">
+  <img src="docs/screenshots/demo3.png" width="48%" alt="MyNotes Demo 3">
+  <img src="docs/screenshots/demo4.png" width="48%" alt="MyNotes Demo 4">
 </p>
 
 ## Live Demo
