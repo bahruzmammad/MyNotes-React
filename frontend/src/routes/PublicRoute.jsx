@@ -1,12 +1,17 @@
 import { Navigate, Outlet } from "react-router-dom"
 
+import Spinner from "../components/ui/Spinner"
 import { useAuth } from "../hooks/useAuth"
 
 function PublicRoute() {
     const { isAuthenticated, loading } = useAuth()
 
     if (loading) {
-        return <div>Loading...</div>
+        return (
+            <div className="flex min-h-screen items-center justify-center">
+                <Spinner size="md" />
+            </div>
+        )
     }
 
     if (isAuthenticated) {

@@ -10,9 +10,7 @@ import { AuthContext } from "./AuthContext.js"
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null)
-    const [loading, setLoading] = useState(() => {
-        return Boolean(localStorage.getItem("token"))
-    })
+    const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
     const login = async (data) => {
@@ -67,24 +65,43 @@ export function AuthProvider({ children }) {
     }
 
     useEffect(() => {
-        const token = localStorage.getItem("token")
+        let active = true
 
-        if (!token) {
-            return
+        const checkAuth = async () => {
+            const token = localStorage.getItem("token")
+
+            if (!token) {
+                if (active) {
+                    setLoading(false)
+                }
+                return
+            }
+
+            try {
+                const response = await getMe()
+
+                if (active) {
+                    setUser(response.user)
+                }
+            } catch (error) {
+                localStorage.removeItem("token")
+
+                if (active) {
+                    setUser(null)
+                    setError(error)
+                }
+            } finally {
+                if (active) {
+                    setLoading(false)
+                }
+            }
         }
 
-        getMe()
-            .then((response) => {
-                setUser(response.user)
-            })
-            .catch((error) => {
-                localStorage.removeItem("token")
-                setUser(null)
-                setError(error)
-            })
-            .finally(() => {
-                setLoading(false)
-            })
+        checkAuth()
+
+        return () => {
+            active = false
+        }
     }, [])
 
     const value = {

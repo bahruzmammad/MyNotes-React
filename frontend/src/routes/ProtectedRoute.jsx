@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom"
 
+import Spinner from "../components/ui/Spinner"
 import { useAuth } from "../hooks/useAuth"
 
 function ProtectedRoute() {
@@ -7,7 +8,11 @@ function ProtectedRoute() {
     const location = useLocation()
 
     if (loading) {
-        return <div>Loading...</div>
+        return (
+            <div className="flex min-h-screen items-center justify-center">
+                <Spinner size="md" />
+            </div>
+        )
     }
 
     if (!isAuthenticated) {
