@@ -1,60 +1,43 @@
-const BASE_URL = process.env.BASE_URL || "http://localhost:8788"
+const BASE_URL = process.env.BASE_URL || "http://localhost:8787"
+
+let tokenA = ""
+let tokenB = ""
+let noteAId = null
+let noteBId = null
 
 let passed = 0
 let failed = 0
 
-function pass(name, status) {
-    console.log(`[PASS] ${name} -> ${status}`)
-    passed++
+const timestamp = Date.now()
+
+const userA = {
+    name: "Test User A",
+    email: `test-a-${timestamp}@example.com`,
+    password: "TestPassword123",
 }
 
-function fail(name, expected, actual, message = "") {
-    console.log(`[FAIL] ${name} -> Expected ${expected}, got ${actual}`)
-
-    if (message) {
-        console.log(`       ${message}`)
-    }
-
-    failed++
+const userB = {
+    name: "Test User B",
+    email: `test-b-${timestamp}@example.com`,
+    password: "TestPassword123",
 }
 
-async function request(name, method, path, expectedStatus, body = null, token = null) {
+async function request(path, options = {}) {
     try {
-        const headers = {}
-
-        if (body !== null) {
-            headers["Content-Type"] = "application/json"
-        }
-
-        if (token) {
-            headers["Authorization"] = `Bearer ${token}`
-        }
-
         const response = await fetch(`${BASE_URL}${path}`, {
-            method,
-            headers,
-            body: body !== null ? JSON.stringify(body) : undefined,
+            ...options,
+            headers: {
+                "Content-Type": "application/json",
+                ...(options.headers || {}),
+            },
         })
-
-        const text = await response.text()
 
         let data = null
 
         try {
-            data = text ? JSON.parse(text) : null
+            data = await response.json()
         } catch {
-            data = text
-        }
-
-        if (response.status === expectedStatus) {
-            pass(name, response.status)
-        } else {
-            fail(
-                name,
-                expectedStatus,
-                response.status,
-                typeof data === "string" ? data : data?.message || "",
-            )
+            data = null
         }
 
         return {
@@ -62,236 +45,575 @@ async function request(name, method, path, expectedStatus, body = null, token = 
             data,
         }
     } catch (error) {
-        fail(name, expectedStatus, "NETWORK ERROR", error.message)
-
         return {
             status: null,
             data: null,
+            error: error.message,
         }
     }
 }
 
-async function main() {
-    console.log("")
-    console.log("============================================================")
-    console.log("              NOTES API WORKER TEST")
-    console.log("============================================================")
-    console.log(`BASE URL: ${BASE_URL}`)
-    console.log("")
-
-    const randomId = () => Math.random().toString(36).substring(2, 10)
-
-    const userA = {
-        name: "Worker Test User A",
-        email: `worker_a_${randomId()}@example.com`,
-        password: "TestPassword123",
+function check(name, expected, result) {
+    if (result.status === expected) {
+        passed++
+        console.log(`[PASS] ${name} -> ${result.status}`)
+        return
     }
 
-    const userB = {
-        name: "Worker Test User B",
-        email: `worker_b_${randomId()}@example.com`,
-        password: "TestPassword123",
+    failed++
+
+    console.log(`[FAIL] ${name} -> Expected ${expected}, got ${result.status ?? "NETWORK ERROR"}`)
+
+    if (result.error) {
+        console.log(`       ${result.error}`)
     }
 
-    let tokenA = null
-    let tokenB = null
-    let noteAId = null
-    let noteBId = null
+    if (result.data) {
+        console.log(`       ${JSON.stringify(result.data)}`)
+    }
+}
 
-    await request("Health Check", "GET", "/api/health", 200)
+function getToken(result) {
+    return result?.data?.token || ""
+}
 
-    await request("API Info", "GET", "/api", 200)
+function getNoteId(result) {
+    return result?.data?.data?.id || null
+}
 
-    await request("D1 Check", "GET", "/api/db-test", 200)
+async function health() {
+    const result = await request("/api/health")
+    check("Health", 200, result)
+}
 
-    const registerA = await request("Register User A", "POST", "/api/auth/register", 201, userA)
+async function apiRoot() {
+    const result = await request("/api")
+    check("API Root", 200, result)
+}
 
-    tokenA = registerA.data?.token || null
+async function dbCheck() {
+    const result = await request("/api/db-test")
+    check("D1 Check", 200, result)
+}
+
+async function registerUserA() {
+    const result = await request("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify(userA),
+    })
+
+    check("Register User A", 201, result)
+
+    tokenA = getToken(result)
 
     if (!tokenA) {
         console.log("[ERROR] User A token alınmadı.")
     }
+}
 
-    const loginA = await request("Login User A", "POST", "/api/auth/login", 200, {
-        email: userA.email,
-        password: userA.password,
+async function loginUserA() {
+    const result = await request("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify(userA),
     })
 
-    if (loginA.data?.token) {
-        tokenA = loginA.data.token
-    }
+    check("Login User A", 200, result)
 
-    await request("Wrong Password", "POST", "/api/auth/login", 401, {
-        email: userA.email,
-        password: "WrongPassword123",
+    tokenA = getToken(result)
+
+    if (!tokenA) {
+        console.log("[ERROR] User A token alınmadı.")
+    }
+}
+
+async function wrongPassword() {
+    const result = await request("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+            email: userA.email,
+            password: "WrongPassword123",
+        }),
     })
 
-    await request("Get Me", "GET", "/api/auth/me", 200, null, tokenA)
+    check("Wrong Password", 401, result)
+}
 
-    await request("Get Me Without Token", "GET", "/api/auth/me", 401)
-
-    await request("Get Me Invalid Token", "GET", "/api/auth/me", 401, null, "invalid-token")
-
-    await request("Get Profile", "GET", "/api/profile", 200, null, tokenA)
-
-    await request("Profile Without Token", "GET", "/api/profile", 401)
-
-    await request(
-        "Update Profile",
-        "PUT",
-        "/api/profile",
-        200,
-        {
-            name: "Updated User A",
-            bio: "Worker + D1",
-            avatar_url: "https://example.com/avatar.png",
+async function getMe() {
+    const result = await request("/api/auth/me", {
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
         },
-        tokenA,
-    )
+    })
 
-    await request("Get Updated Profile", "GET", "/api/profile", 200, null, tokenA)
+    check("Get Me", 200, result)
+}
 
-    const registerB = await request("Register User B", "POST", "/api/auth/register", 201, userB)
+async function getMeWithoutToken() {
+    const result = await request("/api/auth/me")
 
-    tokenB = registerB.data?.token || null
+    check("Get Me Without Token", 401, result)
+}
 
-    const createA = await request(
-        "Create Note A",
-        "POST",
-        "/api/notes",
-        201,
-        {
-            title: "User A Note",
-            content: "Private note A",
-            category: "testing",
+async function getMeInvalidToken() {
+    const result = await request("/api/auth/me", {
+        headers: {
+            Authorization: "Bearer invalid-token",
         },
-        tokenA,
-    )
+    })
 
-    noteAId = createA.data?.data?.id || null
+    check("Get Me Invalid Token", 401, result)
+}
 
-    if (noteAId) {
-        console.log(`       Note A ID: ${noteAId}`)
+async function getProfile() {
+    const result = await request("/api/profile", {
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+    })
+
+    check("Get Profile", 200, result)
+}
+
+async function getProfileWithoutToken() {
+    const result = await request("/api/profile")
+
+    check("Profile Without Token", 401, result)
+}
+
+async function updateProfile() {
+    const result = await request("/api/profile", {
+        method: "PUT",
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+        body: JSON.stringify({
+            name: "Updated Test User A",
+            bio: "Updated bio",
+        }),
+    })
+
+    check("Update Profile", 200, result)
+}
+
+async function getUpdatedProfile() {
+    const result = await request("/api/profile", {
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+    })
+
+    check("Get Updated Profile", 200, result)
+}
+
+async function registerUserB() {
+    const result = await request("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify(userB),
+    })
+
+    check("Register User B", 201, result)
+
+    tokenB = getToken(result)
+
+    if (!tokenB) {
+        console.log("[ERROR] User B token alınmadı.")
+    }
+}
+
+async function createNoteA() {
+    const result = await request("/api/notes", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+        body: JSON.stringify({
+            title: "Note A",
+            content: "Content of note A",
+            category: "general",
+        }),
+    })
+
+    check("Create Note A", 201, result)
+
+    noteAId = getNoteId(result)
+
+    if (!noteAId) {
+        failed++
+
+        console.log("[FAIL] Create Note A -> Note ID alınmadı")
+        console.log(`       Response: ${JSON.stringify(result.data)}`)
+    } else {
+        console.log(`[INFO] Note A ID -> ${noteAId}`)
+    }
+}
+
+async function readOwnNoteA() {
+    if (!noteAId) {
+        return
     }
 
-    await request("Read Own Note A", "GET", `/api/notes/${noteAId}`, 200, null, tokenA)
-
-    await request("User B Read Note A", "GET", `/api/notes/${noteAId}`, 404, null, tokenB)
-
-    await request(
-        "User B Update Note A",
-        "PUT",
-        `/api/notes/${noteAId}`,
-        404,
-        {
-            title: "Hacked",
-            content: "Should fail",
-            category: "testing",
+    const result = await request(`/api/notes/${noteAId}`, {
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
         },
-        tokenB,
-    )
+    })
 
-    await request(
-        "User B Patch Note A",
-        "PATCH",
-        `/api/notes/${noteAId}`,
-        404,
-        {
-            title: "Should fail",
+    check("Read Own Note A", 200, result)
+}
+
+async function userBReadNoteA() {
+    if (!noteAId) {
+        return
+    }
+
+    const result = await request(`/api/notes/${noteAId}`, {
+        headers: {
+            Authorization: `Bearer ${tokenB}`,
         },
-        tokenB,
-    )
+    })
 
-    await request("User B Delete Note A", "DELETE", `/api/notes/${noteAId}`, 404, null, tokenB)
+    check("User B Read Note A", 404, result)
+}
 
-    await request("Note A Still Exists", "GET", `/api/notes/${noteAId}`, 200, null, tokenA)
+async function userBUpdateNoteA() {
+    if (!noteAId) {
+        return
+    }
 
-    await request("Get User A Notes", "GET", "/api/notes", 200, null, tokenA)
+    const result = await request(`/api/notes/${noteAId}`, {
+        method: "PUT",
+        headers: {
+            Authorization: `Bearer ${tokenB}`,
+        },
+        body: JSON.stringify({
+            title: "Unauthorized Update",
+            content: "Should not update",
+            category: "general",
+        }),
+    })
 
-    const updateA = await request(
-        "Update Note A",
-        "PUT",
-        `/api/notes/${noteAId}`,
-        200,
-        {
+    check("User B Update Note A", 404, result)
+}
+
+async function userBPatchNoteA() {
+    if (!noteAId) {
+        return
+    }
+
+    const result = await request(`/api/notes/${noteAId}`, {
+        method: "PATCH",
+        headers: {
+            Authorization: `Bearer ${tokenB}`,
+        },
+        body: JSON.stringify({
+            title: "Unauthorized Patch",
+        }),
+    })
+
+    check("User B Patch Note A", 404, result)
+}
+
+async function userBDeleteNoteA() {
+    if (!noteAId) {
+        return
+    }
+
+    const result = await request(`/api/notes/${noteAId}`, {
+        method: "DELETE",
+        headers: {
+            Authorization: `Bearer ${tokenB}`,
+        },
+    })
+
+    check("User B Delete Note A", 404, result)
+}
+
+async function noteAStillExists() {
+    if (!noteAId) {
+        return
+    }
+
+    const result = await request(`/api/notes/${noteAId}`, {
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+    })
+
+    check("Note A Still Exists", 200, result)
+}
+
+async function getUserANotes() {
+    const result = await request("/api/notes", {
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+    })
+
+    check("Get User A Notes", 200, result)
+}
+
+async function updateNoteA() {
+    if (!noteAId) {
+        return
+    }
+
+    const result = await request(`/api/notes/${noteAId}`, {
+        method: "PUT",
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+        body: JSON.stringify({
             title: "Updated Note A",
-            content: "Updated content",
-            category: "updated",
-        },
-        tokenA,
-    )
-
-    await request(
-        "Patch Note A",
-        "PATCH",
-        `/api/notes/${noteAId}`,
-        200,
-        {
-            is_pinned: true,
-            is_archived: false,
-        },
-        tokenA,
-    )
-
-    const createB = await request(
-        "Create Note B",
-        "POST",
-        "/api/notes",
-        201,
-        {
-            title: "User B Note",
-            content: "Private note B",
-            category: "testing",
-        },
-        tokenB,
-    )
-
-    noteBId = createB.data?.data?.id || null
-
-    if (noteBId) {
-        console.log(`       Note B ID: ${noteBId}`)
-    }
-
-    await request("Read Own Note B", "GET", `/api/notes/${noteBId}`, 200, null, tokenB)
-
-    await request("User A Read Note B", "GET", `/api/notes/${noteBId}`, 404, null, tokenA)
-
-    await request("Notes Without Token", "GET", "/api/notes", 401)
-
-    await request("Create Note Without Token", "POST", "/api/notes", 401, {
-        title: "Unauthorized",
-        content: "Should fail",
+            content: "Updated content A",
+            category: "general",
+        }),
     })
 
-    await request("Delete Note B", "DELETE", `/api/notes/${noteBId}`, 200, null, tokenB)
+    check("Update Note A", 200, result)
+}
 
-    await request("Delete Note A", "DELETE", `/api/notes/${noteAId}`, 200, null, tokenA)
+async function patchNoteA() {
+    if (!noteAId) {
+        return
+    }
 
-    await request("Deleted Note A", "GET", `/api/notes/${noteAId}`, 404, null, tokenA)
+    const result = await request(`/api/notes/${noteAId}`, {
+        method: "PATCH",
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+        body: JSON.stringify({
+            title: "Patched Note A",
+        }),
+    })
 
-    await request("Logout", "POST", "/api/auth/logout", 200, null, tokenA)
+    check("Patch Note A", 200, result)
+}
 
-    await request("Unknown Route", "GET", "/api/does-not-exist", 404)
+async function createNoteB() {
+    const result = await request("/api/notes", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${tokenB}`,
+        },
+        body: JSON.stringify({
+            title: "Note B",
+            content: "Content of note B",
+            category: "general",
+        }),
+    })
+
+    check("Create Note B", 201, result)
+
+    noteBId = getNoteId(result)
+
+    if (!noteBId) {
+        failed++
+
+        console.log("[FAIL] Create Note B -> Note ID alınmadı")
+        console.log(`       Response: ${JSON.stringify(result.data)}`)
+    } else {
+        console.log(`[INFO] Note B ID -> ${noteBId}`)
+    }
+}
+
+async function readOwnNoteB() {
+    if (!noteBId) {
+        return
+    }
+
+    const result = await request(`/api/notes/${noteBId}`, {
+        headers: {
+            Authorization: `Bearer ${tokenB}`,
+        },
+    })
+
+    check("Read Own Note B", 200, result)
+}
+
+async function userAReadNoteB() {
+    if (!noteBId) {
+        return
+    }
+
+    const result = await request(`/api/notes/${noteBId}`, {
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+    })
+
+    check("User A Read Note B", 404, result)
+}
+
+async function notesWithoutToken() {
+    const result = await request("/api/notes")
+
+    check("Notes Without Token", 401, result)
+}
+
+async function createNoteWithoutToken() {
+    const result = await request("/api/notes", {
+        method: "POST",
+        body: JSON.stringify({
+            title: "Unauthorized Note",
+            content: "Should not exist",
+            category: "general",
+        }),
+    })
+
+    check("Create Note Without Token", 401, result)
+}
+
+async function deleteNoteB() {
+    if (!noteBId) {
+        return
+    }
+
+    const result = await request(`/api/notes/${noteBId}`, {
+        method: "DELETE",
+        headers: {
+            Authorization: `Bearer ${tokenB}`,
+        },
+    })
+
+    check("Delete Note B", 200, result)
+}
+
+async function deleteNoteA() {
+    if (!noteAId) {
+        return
+    }
+
+    const result = await request(`/api/notes/${noteAId}`, {
+        method: "DELETE",
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+    })
+
+    check("Delete Note A", 200, result)
+}
+
+async function deletedNoteA() {
+    if (!noteAId) {
+        return
+    }
+
+    const result = await request(`/api/notes/${noteAId}`, {
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+    })
+
+    check("Deleted Note A", 404, result)
+}
+
+async function logout() {
+    const result = await request("/api/auth/logout", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${tokenA}`,
+        },
+    })
+
+    check("Logout", 200, result)
+}
+
+async function unknownRoute() {
+    const result = await request("/api/unknown-route")
+
+    check("Unknown Route", 404, result)
+}
+
+async function main() {
+    console.log("============================================================")
+    console.log("                  MyNotes Worker API Test")
+    console.log("============================================================")
+    console.log(`BASE URL: ${BASE_URL}`)
+    console.log("")
+
+    await health()
+    await apiRoot()
+    await dbCheck()
+
+    await registerUserA()
+    await loginUserA()
+    await wrongPassword()
+
+    if (!tokenA) {
+        console.log("")
+        console.log("User A token alınmadı. Test dayandırıldı.")
+        process.exit(1)
+    }
+
+    await getMe()
+    await getMeWithoutToken()
+    await getMeInvalidToken()
+
+    await getProfile()
+    await getProfileWithoutToken()
+    await updateProfile()
+    await getUpdatedProfile()
+
+    await registerUserB()
+
+    if (!tokenB) {
+        console.log("")
+        console.log("User B token alınmadı. Note testləri dayandırıldı.")
+        await logout()
+        await unknownRoute()
+    } else {
+        await createNoteA()
+
+        if (noteAId) {
+            await readOwnNoteA()
+            await userBReadNoteA()
+            await userBUpdateNoteA()
+            await userBPatchNoteA()
+            await userBDeleteNoteA()
+            await noteAStillExists()
+            await getUserANotes()
+            await updateNoteA()
+            await patchNoteA()
+        }
+
+        await createNoteB()
+
+        if (noteBId) {
+            await readOwnNoteB()
+            await userAReadNoteB()
+        }
+
+        await notesWithoutToken()
+        await createNoteWithoutToken()
+
+        await deleteNoteB()
+        await deleteNoteA()
+        await deletedNoteA()
+        await logout()
+        await unknownRoute()
+    }
 
     console.log("")
     console.log("============================================================")
     console.log("                     TEST RESULT")
     console.log("============================================================")
-
     console.log(`PASSED: ${passed}`)
-
     console.log(`FAILED: ${failed}`)
-
-    console.log("")
+    console.log("============================================================")
 
     if (failed === 0) {
         console.log("ALL WORKER API TESTS PASSED")
-    } else {
-        console.log("SOME WORKER API TESTS FAILED")
-        process.exitCode = 1
+        process.exit(0)
     }
 
-    console.log("============================================================")
+    console.log("SOME WORKER API TESTS FAILED")
+    process.exit(1)
 }
 
-main()
+main().catch((error) => {
+    console.error("")
+    console.error("TEST RUNNER ERROR")
+    console.error(error)
+    process.exit(1)
+})
