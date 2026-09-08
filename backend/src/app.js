@@ -16,7 +16,13 @@ app.use(
     "*",
     cors({
         origin: (origin, c) => {
-            return origin || c.env.CLIENT_URL || "http://localhost:5173"
+            const allowedOrigin = c.env.CLIENT_URL
+
+            if (!origin) {
+                return allowedOrigin
+            }
+
+            return origin === allowedOrigin ? origin : allowedOrigin
         },
         credentials: true,
         allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
