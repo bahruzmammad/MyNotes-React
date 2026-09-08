@@ -1,8 +1,6 @@
-import db from "../config/database.js"
-
-export const getUserById = (userId) => {
-    return new Promise((resolve, reject) => {
-        db.get(
+export const getUserById = async (db, userId) => {
+    return await db
+        .prepare(
             `
             SELECT
                 id,
@@ -15,23 +13,16 @@ export const getUserById = (userId) => {
                 updated_at
             FROM users
             WHERE id = ?
+            LIMIT 1
             `,
-            [userId],
-            (err, user) => {
-                if (err) {
-                    reject(err)
-                    return
-                }
-
-                resolve(user)
-            },
         )
-    })
+        .bind(userId)
+        .first()
 }
 
-export const getUserByEmail = (email) => {
-    return new Promise((resolve, reject) => {
-        db.get(
+export const getUserByEmail = async (db, email) => {
+    return await db
+        .prepare(
             `
             SELECT
                 id,
@@ -44,23 +35,16 @@ export const getUserByEmail = (email) => {
                 updated_at
             FROM users
             WHERE email = ?
+            LIMIT 1
             `,
-            [email],
-            (err, user) => {
-                if (err) {
-                    reject(err)
-                    return
-                }
-
-                resolve(user)
-            },
         )
-    })
+        .bind(email)
+        .first()
 }
 
-export const createUser = ({ name, email, passwordHash }) => {
-    return new Promise((resolve, reject) => {
-        db.run(
+export const createUser = async (db, { name, email, passwordHash }) => {
+    const result = await db
+        .prepare(
             `
             INSERT INTO users (
                 name,
@@ -69,26 +53,20 @@ export const createUser = ({ name, email, passwordHash }) => {
             )
             VALUES (?, ?, ?)
             `,
-            [name, email, passwordHash],
-            function (err) {
-                if (err) {
-                    reject(err)
-                    return
-                }
-
-                resolve({
-                    id: this.lastID,
-                    name,
-                    email,
-                })
-            },
         )
-    })
+        .bind(name, email, passwordHash)
+        .run()
+
+    return {
+        id: result.meta.last_row_id,
+        name,
+        email,
+    }
 }
 
-export const updateUserProfile = (userId, { name, bio, avatar_url }) => {
-    return new Promise((resolve, reject) => {
-        db.run(
+export const updateUserProfile = async (db, userId, { name, bio, avatar_url }) => {
+    const result = await db
+        .prepare(
             `
             UPDATE users
             SET
@@ -98,38 +76,27 @@ export const updateUserProfile = (userId, { name, bio, avatar_url }) => {
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             `,
-            [name, bio, avatar_url, userId],
-            function (err) {
-                if (err) {
-                    reject(err)
-                    return
-                }
-
-                resolve({
-                    changes: this.changes,
-                })
-            },
         )
-    })
+        .bind(name, bio, avatar_url, userId)
+        .run()
+
+    return {
+        changes: result.meta.changes,
+    }
 }
 
-export const emailExists = (email) => {
-    return new Promise((resolve, reject) => {
-        db.get(
+export const emailExists = async (db, email) => {
+    const user = await db
+        .prepare(
             `
             SELECT id
             FROM users
             WHERE email = ?
+            LIMIT 1
             `,
-            [email],
-            (err, user) => {
-                if (err) {
-                    reject(err)
-                    return
-                }
-
-                resolve(Boolean(user))
-            },
         )
-    })
+        .bind(email)
+        .first()
+
+    return Boolean(user)
 }

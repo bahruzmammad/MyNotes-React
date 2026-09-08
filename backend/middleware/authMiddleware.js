@@ -1,56 +1,84 @@
-import jwt from "jsonwebtoken"
-import { log } from "../utils/logger.js"
+import { jwtVerify } from "jose"
 
-export const protect = (req, res, next) => {
+export const protect = async (c, next) => {
     try {
-        const authHeader = req.headers.authorization
+        const authHeader = c.req.header("Authorization")
 
         if (!authHeader) {
-            return res.status(401).json({
-                success: false,
-                message: "Authentication tələb olunur.",
-            })
+            return c.json(
+                {
+                    success: false,
+                    message: "Authentication tələb olunur.",
+                },
+                401,
+            )
         }
 
         if (!authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({
-                success: false,
-                message: "Authorization formatı yanlışdır.",
-            })
+            return c.json(
+                {
+                    success: false,
+                    message: "Authorization formatı yanlışdır.",
+                },
+                401,
+            )
         }
 
-        const token = authHeader.split(" ")[1]
+        const token = authHeader.slice(7).trim()
 
         if (!token) {
-            return res.status(401).json({
-                success: false,
-                message: "Token göndərilməyib.",
-            })
+            return c.json(
+                {
+                    success: false,
+                    message: "Token göndərilməyib.",
+                },
+                401,
+            )
         }
 
-        if (!process.env.JWT_SECRET) {
-            log.error("JWT_SECRET .env faylında yoxdur.")
+        const secret = c.env.JWT_SECRET
 
-            return res.status(500).json({
-                success: false,
-                message: "Server authentication konfiqurasiyası hazır deyil.",
-            })
+        if (!secret) {
+            console.error("JWT_SECRET tapılmadı.")
+
+            return c.json(
+                {
+                    success: false,
+                    message: "Server authentication konfiqurasiyası hazır deyil.",
+                },
+                500,
+            )
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET)
+        const secretKey = new TextEncoder().encode(secret)
 
-        req.user = {
-            userId: decoded.userId,
-            email: decoded.email,
-        }
-
-        next()
-    } catch (error) {
-        log.warn(`JWT yoxlanışı uğursuz oldu: ${error.message}`)
-
-        return res.status(401).json({
-            success: false,
-            message: "Token yanlışdır və ya müddəti bitib.",
+        const { payload } = await jwtVerify(token, secretKey, {
+            algorithms: ["HS256"],
         })
+
+        if (!payload.userId || !payload.email) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Token yanlışdır.",
+                },
+                401,
+            )
+        }
+
+        c.set("user", {
+            userId: Number(payload.userId),
+            email: String(payload.email),
+        })
+
+        await next()
+    } catch {
+        return c.json(
+            {
+                success: false,
+                message: "Token yanlışdır və ya müddəti bitib.",
+            },
+            401,
+        )
     }
 }

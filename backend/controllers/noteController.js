@@ -1,265 +1,373 @@
 import {
-    getAllNotes as getAllNotesModel,
-    getNoteById as getNoteByIdModel,
-    createNote as createNoteModel,
-    updateNote as updateNoteModel,
-    patchNote as patchNoteModel,
-    deleteNote as deleteNoteModel,
+    getAllNotes,
+    getNoteById,
+    createNote,
+    updateNote,
+    patchNote,
+    deleteNote,
 } from "../models/noteModel.js"
 
-import { log } from "../utils/logger.js"
+export const getNotes = async (c) => {
+    try {
+        const user = c.get("user")
 
-export function getNotes(req, res, next) {
-    const userId = req.user.userId
+        const notes = await getAllNotes(c.env.DB, user.userId)
 
-    getAllNotesModel(userId, (err, notes) => {
-        if (err) {
-            log.error(`Notes GET xətası: ${err.message}`)
-            return next(err)
-        }
-
-        return res.status(200).json({
+        return c.json({
             success: true,
             count: notes.length,
             data: notes,
         })
-    })
+    } catch (error) {
+        console.error("Notes GET xətası:", error)
+
+        return c.json(
+            {
+                success: false,
+                message: "Notlar alınmadı.",
+            },
+            500,
+        )
+    }
 }
 
-export function getNote(req, res, next) {
-    const userId = req.user.userId
-    const noteId = Number(req.params.id)
+export const getNote = async (c) => {
+    try {
+        const user = c.get("user")
+        const noteId = Number(c.req.param("id"))
 
-    if (!Number.isInteger(noteId) || noteId <= 0) {
-        return res.status(400).json({
-            success: false,
-            message: "Yanlış note ID.",
-        })
-    }
-
-    getNoteByIdModel(noteId, userId, (err, note) => {
-        if (err) {
-            log.error(`Note GET xətası: ${err.message}`)
-            return next(err)
+        if (!Number.isInteger(noteId) || noteId <= 0) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Yanlış note ID.",
+                },
+                400,
+            )
         }
+
+        const note = await getNoteById(c.env.DB, noteId, user.userId)
 
         if (!note) {
-            return res.status(404).json({
-                success: false,
-                message: "Note tapılmadı.",
-            })
+            return c.json(
+                {
+                    success: false,
+                    message: "Note tapılmadı.",
+                },
+                404,
+            )
         }
 
-        return res.status(200).json({
+        return c.json({
             success: true,
             data: note,
         })
-    })
+    } catch (error) {
+        console.error("Note GET xətası:", error)
+
+        return c.json(
+            {
+                success: false,
+                message: "Note alınmadı.",
+            },
+            500,
+        )
+    }
 }
 
-export function createNote(req, res, next) {
-    const userId = req.user.userId
+export const createNoteHandler = async (c) => {
+    try {
+        const user = c.get("user")
+        const body = await c.req.json().catch(() => ({}))
 
-    const { title, content, category = "general" } = req.body
+        const { title, content, category = "general" } = body
 
-    if (typeof title !== "string" || title.trim().length === 0) {
-        return res.status(400).json({
-            success: false,
-            message: "Title tələb olunur.",
-        })
-    }
+        if (typeof title !== "string" || title.trim().length === 0) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Title tələb olunur.",
+                },
+                400,
+            )
+        }
 
-    if (typeof content !== "string" || content.trim().length === 0) {
-        return res.status(400).json({
-            success: false,
-            message: "Content tələb olunur.",
-        })
-    }
+        if (typeof content !== "string" || content.trim().length === 0) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Content tələb olunur.",
+                },
+                400,
+            )
+        }
 
-    createNoteModel(
-        userId,
-        title.trim(),
-        content.trim(),
-        typeof category === "string" ? category.trim() : "general",
-        (err, result) => {
-            if (err) {
-                log.error(`Note CREATE xətası: ${err.message}`)
-                return next(err)
-            }
+        const cleanTitle = title.trim()
+        const cleanContent = content.trim()
+        const cleanCategory = typeof category === "string" ? category.trim() : "general"
 
-            return res.status(201).json({
+        const result = await createNote(
+            c.env.DB,
+            user.userId,
+            cleanTitle,
+            cleanContent,
+            cleanCategory,
+        )
+
+        return c.json(
+            {
                 success: true,
                 message: "Note yaradıldı.",
                 data: {
-                    id: result.lastID,
-                    user_id: userId,
-                    title: title.trim(),
-                    content: content.trim(),
-                    category: typeof category === "string" ? category.trim() : "general",
+                    id: result.id,
+                    user_id: user.userId,
+                    title: cleanTitle,
+                    content: cleanContent,
+                    category: cleanCategory,
                 },
-            })
-        },
-    )
+            },
+            201,
+        )
+    } catch (error) {
+        console.error("Note CREATE xətası:", error)
+
+        return c.json(
+            {
+                success: false,
+                message: "Note yaradılmadı.",
+            },
+            500,
+        )
+    }
 }
 
-export function updateNote(req, res, next) {
-    const userId = req.user.userId
-    const noteId = Number(req.params.id)
+export const updateNoteHandler = async (c) => {
+    try {
+        const user = c.get("user")
+        const noteId = Number(c.req.param("id"))
+        const body = await c.req.json().catch(() => ({}))
 
-    const { title, content, category = "general" } = req.body
+        const { title, content, category = "general" } = body
 
-    if (!Number.isInteger(noteId) || noteId <= 0) {
-        return res.status(400).json({
-            success: false,
-            message: "Yanlış note ID.",
-        })
-    }
+        if (!Number.isInteger(noteId) || noteId <= 0) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Yanlış note ID.",
+                },
+                400,
+            )
+        }
 
-    if (typeof title !== "string" || title.trim().length === 0) {
-        return res.status(400).json({
-            success: false,
-            message: "Title tələb olunur.",
-        })
-    }
+        if (typeof title !== "string" || title.trim().length === 0) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Title tələb olunur.",
+                },
+                400,
+            )
+        }
 
-    if (typeof content !== "string" || content.trim().length === 0) {
-        return res.status(400).json({
-            success: false,
-            message: "Content tələb olunur.",
-        })
-    }
+        if (typeof content !== "string" || content.trim().length === 0) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Content tələb olunur.",
+                },
+                400,
+            )
+        }
 
-    updateNoteModel(
-        noteId,
-        userId,
-        title.trim(),
-        content.trim(),
-        typeof category === "string" ? category.trim() : "general",
-        (err, result) => {
-            if (err) {
-                log.error(`Note PUT xətası: ${err.message}`)
-                return next(err)
-            }
+        const result = await updateNote(
+            c.env.DB,
+            noteId,
+            user.userId,
+            title.trim(),
+            content.trim(),
+            typeof category === "string" ? category.trim() : "general",
+        )
 
-            if (result.changes === 0) {
-                return res.status(404).json({
+        if (result.meta.changes === 0) {
+            return c.json(
+                {
                     success: false,
                     message: "Note tapılmadı və ya sizə aid deyil.",
-                })
-            }
-
-            return res.status(200).json({
-                success: true,
-                message: "Note yeniləndi.",
-            })
-        },
-    )
-}
-
-export function patchNote(req, res, next) {
-    const userId = req.user.userId
-    const noteId = Number(req.params.id)
-
-    if (!Number.isInteger(noteId) || noteId <= 0) {
-        return res.status(400).json({
-            success: false,
-            message: "Yanlış note ID.",
-        })
-    }
-
-    const body = req.body || {}
-
-    if (
-        body.title !== undefined &&
-        (typeof body.title !== "string" || body.title.trim().length === 0)
-    ) {
-        return res.status(400).json({
-            success: false,
-            message: "Title düzgün deyil.",
-        })
-    }
-
-    if (
-        body.content !== undefined &&
-        (typeof body.content !== "string" || body.content.trim().length === 0)
-    ) {
-        return res.status(400).json({
-            success: false,
-            message: "Content düzgün deyil.",
-        })
-    }
-
-    const fields = {
-        ...body,
-    }
-
-    if (typeof fields.title === "string") {
-        fields.title = fields.title.trim()
-    }
-
-    if (typeof fields.content === "string") {
-        fields.content = fields.content.trim()
-    }
-
-    if (typeof fields.category === "string") {
-        fields.category = fields.category.trim()
-    }
-
-    if (fields.is_pinned !== undefined) {
-        fields.is_pinned = fields.is_pinned ? 1 : 0
-    }
-
-    if (fields.is_archived !== undefined) {
-        fields.is_archived = fields.is_archived ? 1 : 0
-    }
-
-    patchNoteModel(noteId, userId, fields, (err, result) => {
-        if (err) {
-            log.error(`Note PATCH xətası: ${err.message}`)
-            return next(err)
+                },
+                404,
+            )
         }
 
-        if (result.changes === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Note tapılmadı və ya sizə aid deyil.",
-            })
-        }
-
-        return res.status(200).json({
+        return c.json({
             success: true,
             message: "Note yeniləndi.",
         })
-    })
+    } catch (error) {
+        console.error("Note PUT xətası:", error)
+
+        return c.json(
+            {
+                success: false,
+                message: "Note yenilənmədi.",
+            },
+            500,
+        )
+    }
 }
 
-export function deleteNote(req, res, next) {
-    const userId = req.user.userId
-    const noteId = Number(req.params.id)
+export const patchNoteHandler = async (c) => {
+    try {
+        const user = c.get("user")
+        const noteId = Number(c.req.param("id"))
+        const body = await c.req.json().catch(() => ({}))
 
-    if (!Number.isInteger(noteId) || noteId <= 0) {
-        return res.status(400).json({
-            success: false,
-            message: "Yanlış note ID.",
+        if (!Number.isInteger(noteId) || noteId <= 0) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Yanlış note ID.",
+                },
+                400,
+            )
+        }
+
+        if (
+            body.title !== undefined &&
+            (typeof body.title !== "string" || body.title.trim().length === 0)
+        ) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Title düzgün deyil.",
+                },
+                400,
+            )
+        }
+
+        if (
+            body.content !== undefined &&
+            (typeof body.content !== "string" || body.content.trim().length === 0)
+        ) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Content düzgün deyil.",
+                },
+                400,
+            )
+        }
+
+        const fields = {}
+
+        if (body.title !== undefined) {
+            fields.title = body.title.trim()
+        }
+
+        if (body.content !== undefined) {
+            fields.content = body.content.trim()
+        }
+
+        if (body.category !== undefined) {
+            if (typeof body.category !== "string") {
+                return c.json(
+                    {
+                        success: false,
+                        message: "Category düzgün deyil.",
+                    },
+                    400,
+                )
+            }
+
+            fields.category = body.category.trim()
+        }
+
+        if (body.is_pinned !== undefined) {
+            fields.is_pinned = body.is_pinned ? 1 : 0
+        }
+
+        if (body.is_archived !== undefined) {
+            fields.is_archived = body.is_archived ? 1 : 0
+        }
+
+        const result = await patchNote(c.env.DB, noteId, user.userId, fields)
+
+        if (result.meta.changes === 0) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Note tapılmadı və ya sizə aid deyil.",
+                },
+                404,
+            )
+        }
+
+        return c.json({
+            success: true,
+            message: "Note yeniləndi.",
         })
-    }
-
-    deleteNoteModel(noteId, userId, (err, result) => {
-        if (err) {
-            log.error(`Note DELETE xətası: ${err.message}`)
-            return next(err)
+    } catch (error) {
+        if (error.message === "Yenilənəcək sahə yoxdur.") {
+            return c.json(
+                {
+                    success: false,
+                    message: "Yenilənəcək sahə yoxdur.",
+                },
+                400,
+            )
         }
 
-        if (result.changes === 0) {
-            return res.status(404).json({
+        console.error("Note PATCH xətası:", error)
+
+        return c.json(
+            {
                 success: false,
-                message: "Note tapılmadı və ya sizə aid deyil.",
-            })
+                message: "Note yenilənmədi.",
+            },
+            500,
+        )
+    }
+}
+
+export const deleteNoteHandler = async (c) => {
+    try {
+        const user = c.get("user")
+        const noteId = Number(c.req.param("id"))
+
+        if (!Number.isInteger(noteId) || noteId <= 0) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Yanlış note ID.",
+                },
+                400,
+            )
         }
 
-        return res.status(200).json({
+        const result = await deleteNote(c.env.DB, noteId, user.userId)
+
+        if (result.meta.changes === 0) {
+            return c.json(
+                {
+                    success: false,
+                    message: "Note tapılmadı və ya sizə aid deyil.",
+                },
+                404,
+            )
+        }
+
+        return c.json({
             success: true,
             message: "Note silindi.",
         })
-    })
+    } catch (error) {
+        console.error("Note DELETE xətası:", error)
+
+        return c.json(
+            {
+                success: false,
+                message: "Note silinmədi.",
+            },
+            500,
+        )
+    }
 }

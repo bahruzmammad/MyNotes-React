@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:5000"
+const BASE_URL = process.env.BASE_URL || "http://localhost:8788"
 
 let passed = 0
 let failed = 0
@@ -10,9 +10,11 @@ function pass(name, status) {
 
 function fail(name, expected, actual, message = "") {
     console.log(`[FAIL] ${name} -> Expected ${expected}, got ${actual}`)
+
     if (message) {
         console.log(`       ${message}`)
     }
+
     failed++
 }
 
@@ -72,7 +74,7 @@ async function request(name, method, path, expectedStatus, body = null, token = 
 async function main() {
     console.log("")
     console.log("============================================================")
-    console.log("              NOTES API JAVASCRIPT TEST")
+    console.log("              NOTES API WORKER TEST")
     console.log("============================================================")
     console.log(`BASE URL: ${BASE_URL}`)
     console.log("")
@@ -80,20 +82,19 @@ async function main() {
     const randomId = () => Math.random().toString(36).substring(2, 10)
 
     const userA = {
-        name: "JS Test User A",
-        email: `js_user_a_${randomId()}@example.com`,
+        name: "Worker Test User A",
+        email: `worker_a_${randomId()}@example.com`,
         password: "TestPassword123",
     }
 
     const userB = {
-        name: "JS Test User B",
-        email: `js_user_b_${randomId()}@example.com`,
+        name: "Worker Test User B",
+        email: `worker_b_${randomId()}@example.com`,
         password: "TestPassword123",
     }
 
     let tokenA = null
     let tokenB = null
-
     let noteAId = null
     let noteBId = null
 
@@ -101,9 +102,15 @@ async function main() {
 
     await request("API Info", "GET", "/api", 200)
 
+    await request("D1 Check", "GET", "/api/db-test", 200)
+
     const registerA = await request("Register User A", "POST", "/api/auth/register", 201, userA)
 
     tokenA = registerA.data?.token || null
+
+    if (!tokenA) {
+        console.log("[ERROR] User A token alınmadı.")
+    }
 
     const loginA = await request("Login User A", "POST", "/api/auth/login", 200, {
         email: userA.email,
@@ -114,48 +121,48 @@ async function main() {
         tokenA = loginA.data.token
     }
 
-    await request("User A Wrong Password", "POST", "/api/auth/login", 401, {
+    await request("Wrong Password", "POST", "/api/auth/login", 401, {
         email: userA.email,
         password: "WrongPassword123",
     })
 
-    await request("User A /me", "GET", "/api/auth/me", 200, null, tokenA)
+    await request("Get Me", "GET", "/api/auth/me", 200, null, tokenA)
 
-    await request("User A /me Without Token", "GET", "/api/auth/me", 401)
+    await request("Get Me Without Token", "GET", "/api/auth/me", 401)
 
-    await request("User A /me Invalid Token", "GET", "/api/auth/me", 401, null, "invalid-token")
+    await request("Get Me Invalid Token", "GET", "/api/auth/me", 401, null, "invalid-token")
 
-    await request("User A Profile GET", "GET", "/api/profile", 200, null, tokenA)
+    await request("Get Profile", "GET", "/api/profile", 200, null, tokenA)
 
-    await request("Profile GET Without Token", "GET", "/api/profile", 401)
+    await request("Profile Without Token", "GET", "/api/profile", 401)
 
     await request(
-        "User A Profile PUT",
+        "Update Profile",
         "PUT",
         "/api/profile",
         200,
         {
-            name: "JS Updated User A",
-            bio: "JavaScript + Node.js + SQLite",
-            avatar_url: "https://example.com/avatar-a.png",
+            name: "Updated User A",
+            bio: "Worker + D1",
+            avatar_url: "https://example.com/avatar.png",
         },
         tokenA,
     )
 
-    await request("User A Profile GET After Update", "GET", "/api/profile", 200, null, tokenA)
+    await request("Get Updated Profile", "GET", "/api/profile", 200, null, tokenA)
 
     const registerB = await request("Register User B", "POST", "/api/auth/register", 201, userB)
 
     tokenB = registerB.data?.token || null
 
     const createA = await request(
-        "User A Create Note",
+        "Create Note A",
         "POST",
         "/api/notes",
         201,
         {
             title: "User A Note",
-            content: "Private note owned by User A",
+            content: "Private note A",
             category: "testing",
         },
         tokenA,
@@ -167,48 +174,73 @@ async function main() {
         console.log(`       Note A ID: ${noteAId}`)
     }
 
-    await request("User A Read Own Note", "GET", `/api/notes/${noteAId}`, 200, null, tokenA)
+    await request("Read Own Note A", "GET", `/api/notes/${noteAId}`, 200, null, tokenA)
 
-    await request("User B Read User A Note", "GET", `/api/notes/${noteAId}`, 404, null, tokenB)
+    await request("User B Read Note A", "GET", `/api/notes/${noteAId}`, 404, null, tokenB)
 
     await request(
-        "User B PUT User A Note",
+        "User B Update Note A",
         "PUT",
         `/api/notes/${noteAId}`,
         404,
         {
             title: "Hacked",
-            content: "Should not update",
+            content: "Should fail",
             category: "testing",
         },
         tokenB,
     )
 
     await request(
-        "User B PATCH User A Note",
+        "User B Patch Note A",
         "PATCH",
         `/api/notes/${noteAId}`,
         404,
         {
-            title: "Should Not Work",
+            title: "Should fail",
         },
         tokenB,
     )
 
-    await request("User B DELETE User A Note", "DELETE", `/api/notes/${noteAId}`, 404, null, tokenB)
+    await request("User B Delete Note A", "DELETE", `/api/notes/${noteAId}`, 404, null, tokenB)
 
-    await request("User A Note Still Exists", "GET", `/api/notes/${noteAId}`, 200, null, tokenA)
+    await request("Note A Still Exists", "GET", `/api/notes/${noteAId}`, 200, null, tokenA)
 
-    await request("User A Get Notes", "GET", "/api/notes", 200, null, tokenA)
+    await request("Get User A Notes", "GET", "/api/notes", 200, null, tokenA)
+
+    const updateA = await request(
+        "Update Note A",
+        "PUT",
+        `/api/notes/${noteAId}`,
+        200,
+        {
+            title: "Updated Note A",
+            content: "Updated content",
+            category: "updated",
+        },
+        tokenA,
+    )
+
+    await request(
+        "Patch Note A",
+        "PATCH",
+        `/api/notes/${noteAId}`,
+        200,
+        {
+            is_pinned: true,
+            is_archived: false,
+        },
+        tokenA,
+    )
 
     const createB = await request(
-        "User B Create Note",
+        "Create Note B",
         "POST",
         "/api/notes",
         201,
         {
             title: "User B Note",
-            content: "Private note owned by User B",
+            content: "Private note B",
             category: "testing",
         },
         tokenB,
@@ -220,37 +252,24 @@ async function main() {
         console.log(`       Note B ID: ${noteBId}`)
     }
 
-    await request("User B Read Own Note", "GET", `/api/notes/${noteBId}`, 200, null, tokenB)
+    await request("Read Own Note B", "GET", `/api/notes/${noteBId}`, 200, null, tokenB)
 
-    await request("User A Read User B Note", "GET", `/api/notes/${noteBId}`, 404, null, tokenA)
+    await request("User A Read Note B", "GET", `/api/notes/${noteBId}`, 404, null, tokenA)
 
-    await request(
-        "User A PUT User B Note",
-        "PUT",
-        `/api/notes/${noteBId}`,
-        404,
-        {
-            title: "Hacked",
-            content: "Should not work",
-            category: "testing",
-        },
-        tokenA,
-    )
+    await request("Notes Without Token", "GET", "/api/notes", 401)
 
-    await request("User A DELETE User B Note", "DELETE", `/api/notes/${noteBId}`, 404, null, tokenA)
-
-    await request("Notes GET Without Token", "GET", "/api/notes", 401)
-
-    await request("Notes POST Without Token", "POST", "/api/notes", 401, {
+    await request("Create Note Without Token", "POST", "/api/notes", 401, {
         title: "Unauthorized",
         content: "Should fail",
     })
 
-    await request("User A Delete Own Note", "DELETE", `/api/notes/${noteAId}`, 200, null, tokenA)
+    await request("Delete Note B", "DELETE", `/api/notes/${noteBId}`, 200, null, tokenB)
 
-    await request("Deleted Note GET", "GET", `/api/notes/${noteAId}`, 404, null, tokenA)
+    await request("Delete Note A", "DELETE", `/api/notes/${noteAId}`, 200, null, tokenA)
 
-    await request("User A Logout", "POST", "/api/auth/logout", 200, null, tokenA)
+    await request("Deleted Note A", "GET", `/api/notes/${noteAId}`, 404, null, tokenA)
+
+    await request("Logout", "POST", "/api/auth/logout", 200, null, tokenA)
 
     await request("Unknown Route", "GET", "/api/does-not-exist", 404)
 
@@ -260,14 +279,15 @@ async function main() {
     console.log("============================================================")
 
     console.log(`PASSED: ${passed}`)
+
     console.log(`FAILED: ${failed}`)
 
     console.log("")
 
     if (failed === 0) {
-        console.log("ALL JAVASCRIPT TESTS PASSED")
+        console.log("ALL WORKER API TESTS PASSED")
     } else {
-        console.log("SOME JAVASCRIPT TESTS FAILED")
+        console.log("SOME WORKER API TESTS FAILED")
         process.exitCode = 1
     }
 
